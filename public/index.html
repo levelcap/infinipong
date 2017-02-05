@@ -112,7 +112,7 @@
         var socket = io();
         socket.on('connect', function () {
             console.log("Connected");
-            socket.emit('join', {room: data.pong._id, player: data.pong.active});
+            socket.emit('join', {room: data.pong._id, player: data.player});
         });
 
         socket.on('msg', function (msg) {

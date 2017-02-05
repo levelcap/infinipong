@@ -13,7 +13,7 @@ router.route('/')
     .post(function (req, res) {
         var pong = new Pong();
         pong.position = req.body.position;
-        pong.active = req.body.active;
+        pong.activePlayers = req.body.activePlayers;
 
         pong.save(function (err, pong) {
             if (err) {
@@ -34,29 +34,50 @@ router.route('/')
 
 router.route('/start')
     .post(function (req, res) {
+        //Starting a
         var socketServices = new SocketServices();
         var pongServices = new PongServices();
         var newPong = false;
-        var pong = pongServices.getCurrentPong();
-        if (pong === null || pong.active === 2) {
+        var pong = pongServices.getPongThatNeedsPlayers();
+        var thisPlayer = 1;
+
+        if (pong === null) {
             pong = new Pong();
-            console.log("Position: " + pongServices.getNextPosition());
             pong.position = pongServices.getNextPosition();
-            pong.active = 1;
+            pong.activePlayers = [{paddle: "left"}];
             newPong = true;
-            console.log("Creating a new pong that looks like: " + pong);
         } else {
-            pong.active = 2;
+            if (pong.activePlayers[0].paddle == "left") {
+                pong.activePlayers.push({paddle: "right"});
+            } else {
+                pong.activePlayers.push({paddle: "left"});
+            }
+            thisPlayer = 2;
         }
 
-        pong.save(function (err, pong) {
-            if (err) {
-                res.send(err);
-            }
-            pongServices.addOrUpdateLatestPong(pong, newPong);
-            socketServices.start();
-            res.json({message: 'Pong game created!', pong: pong});
-        });
+        if (newPong) {
+            pong.save(function (err, pong) {
+                if (err) {
+                    res.send(err);
+                }
+                pongServices.addOrUpdateLatestPong(pong, newPong);
+                socketServices.start();
+                res.json({message: 'Pong game created!', pong: pong, player: thisPlayer});
+            });
+        } else {
+            Pong.findById(pong.id, function (err, respPong) {
+                if (err)
+                    console.error(err);
+
+                respPong.activePlayers = pong.activePlayers;
+
+                pong.save(function (err) {
+                    if (err)
+                        console.error(err);
+                    res.json({message: 'Pong game update!', pong: pong, player: thisPlayer});
+                });
+            });
+        }
     });
 
 router.route('/:pong_id')
@@ -73,7 +94,7 @@ router.route('/:pong_id')
                 res.send(err);
 
             pong.position = req.body.position;
-            pong.active = req.body.active;
+            pong.activePlayers = req.body.activePlayers;
 
             pong.save(function (err) {
                 if (err)

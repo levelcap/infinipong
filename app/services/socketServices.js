@@ -8,6 +8,9 @@ function SocketServices() {
 
 }
 
+/**
+ * Setup socket event listeners
+ */
 SocketServices.prototype.start = function () {
     //Don't need to start twice
     if (_started) {
@@ -51,8 +54,8 @@ SocketServices.prototype.start = function () {
             // Drop out of the game
             socket.leave(_room);
 
-            // Atomic update to game status
-            console.log(_player + " left room " + _room);
+            // Update to game status
+            pongServices.addPongToNeedsPlayersList(_room, _player);
             io.sockets.in(_room).emit('msg', _player + " left room " + _room);
 
             var event = new Event();
@@ -89,7 +92,7 @@ SocketServices.prototype.start = function () {
     _started = true;
 };
 
-SocketServices.prototype.isStarted = function() {
+SocketServices.prototype.isStarted = function () {
     return _started;
 };
 

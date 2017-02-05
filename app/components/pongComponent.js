@@ -2,30 +2,41 @@ var BALL_LIMIT = 10;
 //Paddle total size is 1 + (end size * 2) to account for one middle block two ends
 var PADDLE_END_SIZE = 2;
 var PADDLE_LIMIT = BALL_LIMIT - PADDLE_END_SIZE;
+var _removeIdx = [];
 
-function PongComponent(id, position, active, pongServices) {
+/**
+ * PongComponent constructor
+ * @param id
+ * @param position
+ * @param activePlayers
+ * @param pongServices
+ * @constructor
+ */
+function PongComponent(id, position, activePlayers, pongServices) {
     this.id = id;
     this.position = position;
-    this.active = active;
-    this.ball = {
+    this.activePlayers = activePlayers;
+    this.balls = [{
         //0,0 represents center of our game grid
         x: 0,
         y: 0,
         moveX: 1,
-        moveY: 0,
-        speed: 1
-    };
+        moveY: 0
+    }];
     //0 represents centered paddles
     this.paddleL = 0;
     this.paddleR = 0;
     this.pongServices = pongServices;
 }
 
+/**
+ * Start the game loop to update ball position
+ */
 PongComponent.prototype.start = function () {
     //Update the game on a fixed interval to handle ball movement and scoring separate from client commands
     var self = this;
     setInterval(function () {
-        self.updatePongComponentBall();
+        self.updatePongComponentBalls();
         //Emit updates via sockets
         self.pongServices.tickComplete(self);
     }, 1000);
@@ -36,17 +47,18 @@ PongComponent.prototype.start = function () {
  * If there is an adjacent game we may also update the score via the nextGameOrScore method
  * @param moveX - Direction of ball movement after reset
  */
-PongComponent.prototype.newPoint = function (moveX) {
-    this.ball = {
-        //0,0 represents center of our game grid
-        x: 0,
-        y: 0,
-        moveX: moveX,
-        moveY: 0,
-        speed: 1
-    };
+PongComponent.prototype.newPoint = function (moveX, ball) {
+    //We only need to add a new ball if we have run out of balls in play
+    if (_removeIdx.length === this.balls.length) {
+        this.balls.push({
+            x: 0,
+            y: 0,
+            moveX: moveX,
+            moveY: 0,
+        });
+    }
 
-    this.pongServices.nextGameOrScore(moveX, this);
+    this.pongServices.nextGameOrScore(moveX, this, ball);
 };
 
 /**
@@ -67,25 +79,39 @@ PongComponent.prototype.updatePongComponentPlayer = function (player, movement) 
 /**
  * Updates ball position for server tick, kicks off scoring and collisions if needed
  */
-PongComponent.prototype.updatePongComponentBall = function () {
+PongComponent.prototype.updatePongComponentBalls = function () {
     //Move the ball by its current move numbers
-    this.ball.x += this.ball.moveX;
-    this.ball.y += this.ball.moveY;
+    var index = 0;
+    var self = this;
+    this.balls.forEach(function (ball) {
+        ball.x += ball.moveX;
+        ball.y += ball.moveY;
 
-    //Check ceiling collision, if the Y position is greater than the limit, switch our move angle
-    if (Math.abs(this.ball.y) >= BALL_LIMIT) {
-        this.ball.moveY *= -1;
-    }
-
-    //Check and perform paddle or wall collision
-    if (Math.abs(this.ball.x) >= BALL_LIMIT) {
-        //Check if the paddle covers the current ball position, moveX < 0 could be paddleL, otherwise paddleR
-        if (this.ball.moveX < 0) {
-            this.performPaddleCollision(this.paddleL, true);
-        } else {
-            this.performPaddleCollision(this.paddleR, false);
+        //Check ceiling collision, if the Y position is greater than the limit, switch our move angle
+        if (Math.abs(ball.y) >= BALL_LIMIT) {
+            ball.moveY *= -1;
         }
-    }
+
+        //Check and perform paddle or wall collision
+        if (Math.abs(ball.x) >= BALL_LIMIT) {
+            //Check if the paddle covers the current ball position, moveX < 0 could be paddleL, otherwise paddleR
+            if (ball.moveX < 0) {
+                self.performPaddleCollision(self.paddleL, true, ball, index);
+            } else {
+                self.performPaddleCollision(self.paddleR, false, ball, index);
+            }
+        }
+        index++;
+    });
+
+    //Remove balls that have left play
+    var self = this;
+    _removeIdx.forEach(function (idx) {
+        self.balls.splice(idx, 1);
+    });
+
+    //Blank remove array for next loop
+    _removeIdx = [];
 };
 
 /**
@@ -107,14 +133,6 @@ PongComponent.prototype.getNextPosition = function () {
     }
 };
 
-PongComponent.prototype.getCurrentPong = function () {
-    return _currentPong;
-};
-
-PongComponent.prototype.setActive = function (active) {
-    this.active = active;
-}
-
 /**
  * Updates the paddle and returns its new position
  * @param movement
@@ -132,24 +150,53 @@ PongComponent.prototype.updatePaddle = function (movement, position) {
     }
 }
 
-PongComponent.prototype.performPaddleCollision = function (paddle, left) {
-    var ballRelLocation = this.ball.y - paddle;
+/**
+ * Check if the ball has collided with a paddle or wall, score accordingly and update game state
+ * @param paddle - Paddle position
+ * @param left - Whether or not the paddle we are using is the left paddle
+ * @param ball - Ball to check collision states for
+ * @param index - Index of ball if we need to remove it after scoring
+ */
+PongComponent.prototype.performPaddleCollision = function (paddle, left, ball, index) {
+    var ballRelLocation = ball.y - paddle;
     if (Math.abs(ballRelLocation) <= PADDLE_END_SIZE) {
         //Reverse direction
-        this.ball.moveX *= -1;
+        ball.moveX *= -1;
         //Flat hit, no movement vertical movement
         if (ballRelLocation === 0) {
-            this.ball.moveY = 0;
+            ball.moveY = 0;
         } else {
-            this.ball.moveY = ballRelLocation;
+            ball.moveY = ballRelLocation;
         }
     } else {
         //Ball has hit a wall, call the newPoint method which will determine if we've scored or moved the ball to the next game
+        _removeIdx.push(index);
         if (left) {
-            this.newPoint(-1);
+            this.newPoint(-1, ball);
         } else {
-            this.newPoint(1);
+            this.newPoint(1, ball);
         }
     }
 }
+
+/*
+ * Add a new ball to this game from another game's goal
+ * @param ball - Ball information from other game
+ */
+PongComponent.prototype.addNewBall = function (ball) {
+    var newX = 0;
+    if (ball.x < 0) {
+        newX = (ball.x + 1) * -1;
+    } else {
+        newX = (ball.x - 1) * -1;
+    }
+    var newBall = {
+        x: newX,
+        y: ball.y,
+        moveX: 1,
+        moveY: ball.moveY
+    };
+
+    this.balls.push(newBall);
+};
 module.exports = PongComponent;

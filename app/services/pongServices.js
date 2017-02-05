@@ -8,6 +8,7 @@ var EventServices = require('../services/eventServices');
 var eventServices = new EventServices();
 
 var _pongs = new HashMap();
+var _pongsNeedPlayers = [];
 var _high = Number.NaN;
 var _low = Number.NaN;
 var _currentPong = null;
@@ -19,6 +20,11 @@ function PongServices() {
 
 }
 
+/**
+ *
+ * @param pong
+ * @param newPong
+ */
 PongServices.prototype.addOrUpdateLatestPong = function (pong, newPong) {
     _currentPong = pong;
     if (newPong) {
@@ -30,12 +36,15 @@ PongServices.prototype.addOrUpdateLatestPong = function (pong, newPong) {
         if (isNaN(_low) || _low > pong.position) {
             _low = last;
         }
-        var pongComponent = new PongComponent(pong.id, pong.position, pong.active, this);
+        var pongComponent = new PongComponent(pong.id, pong.position, pong.activePlayers, this);
         pongComponent.start();
         _pongs.set(pong.id, pongComponent);
+        //New pongs need a second player
+        _pongsNeedPlayers.push(pong);
     } else {
         var pongComponent = _pongs.get(pong.id);
-        pongComponent.setActive(2);
+        //We only add players to the oldest pong that needs them, remove this from the pongsNeedPlayers array
+        _pongsNeedPlayers.splice(0,1);
     }
 
 };
@@ -80,16 +89,30 @@ PongServices.prototype.getNextPosition = function () {
     }
 };
 
-PongServices.prototype.getCurrentPong = function () {
-    return _currentPong;
+/**
+ * Checks the needs players list and returns the oldest pong that requires a player, or null if none do
+ * @returns the oldest pong game that is missing a player or null
+ */
+PongServices.prototype.getPongThatNeedsPlayers = function () {
+    if (_pongsNeedPlayers != null && _pongsNeedPlayers.length > 0) {
+        return _pongsNeedPlayers[0];
+    } else {
+        return null;
+    }
 };
 
-PongServices.prototype.nextGameOrScore = function (moveX, pongComponent) {
+/**
+ * Check if a score is a goal or if a ball should be added to an adjacent pong game.
+ * @param moveX - Direction and amount of the move on the x-axis
+ * @param pongComponent - Pong game state
+ * @param ball - Information about the ball which scored
+ */
+PongServices.prototype.nextGameOrScore = function (moveX, pongComponent, ball) {
     var nextGame = pongComponent.position + moveX;
     var self = this;
     Pong.findOne({'position': nextGame}, function (err, pong) {
         if (err) {
-            console.log(err);
+            console.error(err);
         }
         if (pong == null) {
             if (moveX < 0) {
@@ -100,11 +123,15 @@ PongServices.prototype.nextGameOrScore = function (moveX, pongComponent) {
             self.goal(pongComponent);
         } else {
             var nextPongComponent = self.getPongById(pong.id);
-            console.log("Found pongComponent " + pongComponent + " updating with extra ball");
+            nextPongComponent.addNewBall(ball);
         }
     });
 };
 
+/**
+ * Send a goal / score update
+ * @param pongComponent - pong game where score occured
+ */
 PongServices.prototype.goal = function (pongComponent) {
     var event = new Event();
     event.ts = new Date().getTime();
@@ -115,10 +142,17 @@ PongServices.prototype.goal = function (pongComponent) {
 
     eventServices.addEvent(event);
     var goalMessage = "Goal! Score is now Left: " + _scoreLeftTeam + ", Right: " + _scoreRightTeam;
-    console.log(goalMessage);
-    SocketComponent.getIo().sockets.in(pongComponent.id).emit('goal', {scoreL: _scoreLeftTeam, scoreR: _scoreRightTeam, msg: goalMessage});
+    SocketComponent.getIo().sockets.in(pongComponent.id).emit('goal', {
+        scoreL: _scoreLeftTeam,
+        scoreR: _scoreRightTeam,
+        msg: goalMessage
+    });
 };
 
+/**
+ * Emit a message about the current pong state once per tick
+ * @param pongComponent - pong game to send tick update for
+ */
 PongServices.prototype.tickComplete = function (pongComponent) {
     var event = new Event();
     event.ts = new Date().getTime();
@@ -128,8 +162,58 @@ PongServices.prototype.tickComplete = function (pongComponent) {
     event.pongId = pongComponent.id;
 
     eventServices.addEvent(event);
-    var stateMessage = "Ball = " + pongComponent.ball.x + "," + pongComponent.ball.y;
+    var stateMessage = "Balls = " + JSON.stringify(pongComponent.balls);
     SocketComponent.getIo().sockets.in(pongComponent.id).emit('msg', stateMessage);
-}
+};
+
+/**
+ * When a player disconnects, add the game to the list of games that need players.  Or remove it if that was the last player
+ * @param id - id of game to update
+ * @param player - player that left the game
+ */
+PongServices.prototype.addPongToNeedsPlayersList = function(id, player) {
+    var pongComponent = this.getPongById(id);
+    if (pongComponent.activePlayers.length === 1) {
+        this.updatePongsForEmptyGame(pongComponent.position);
+    } else {
+        if (player === 1) {
+            pongComponent.activePlayers = [{paddle: "right"}];
+        } else {
+            pongComponent.activePlayers = [{paddle: "left"}];
+        }
+        _pongsNeedPlayers.push(pongComponent);
+    }
+};
+
+/**
+ * Updates games after removing the empty game, positions moved so scores can continue moving between games
+ * @param emptyPosition - Game position to remove and update around
+ */
+PongServices.prototype.updatePongsForEmptyGame = function (emptyPosition) {
+    //First remove our empty game
+    Pong.remove({position: emptyPosition}, function (err, pong) {
+        if (err)
+            res.send(err);
+    });
+
+    //If the empty position was less than zero, find all positions less than zero and update their position by +1
+    if (emptyPosition < 0) {
+        Pong.update({
+            position: {$lt: emptyPosition},
+        }, {$inc: {position: 1}}, {multi: true}, function (err, result) {
+            if (err)
+                res.send(err);
+        });
+    }
+    //If the empty position was greater than zero, find all positions greater than zero and update their position by -1
+    else {
+        Pong.update({
+            position: {$gt: emptyPosition},
+        }, {$inc: {position: -1}}, {multi: true}, function (err, result) {
+            if (err)
+                res.send(err);
+        });
+    }
+};
 
 module.exports = PongServices;
