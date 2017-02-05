@@ -42,9 +42,9 @@ http.listen(port, function () {
 });
 
 var pongServices = new PongServices();
-setInterval(function() {
-    pongServices.getPongs().forEach(function(pong) {
-        console.log("Trying to send a thing for: " + pong.id);
-        io.sockets.in(pong.id).emit('msg', 'Hello from ' + pong.id);
-    });
-}, 1000);
+// setInterval(function() {
+//     pongServices.getPongs().forEach(function(pong) {
+//         console.log("Trying to send a thing for: " + pong.id);
+//         io.sockets.in(pong.id).emit('msg', 'Hello from ' + pong.id);
+//     });
+// }, 1000);

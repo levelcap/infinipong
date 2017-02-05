@@ -1,4 +1,5 @@
 var EventServices = require('../services/eventServices');
+var PongServices = require('../services/pongServices');
 var Event = require('../models/event');
 
 function SocketServices(io) {
@@ -8,6 +9,7 @@ function SocketServices(io) {
 SocketServices.prototype.start = function () {
     var io = this.io;
     var eventServices = new EventServices();
+    var pongServices = new PongServices();
 
     io.on('connection', function (socket) {
         console.log('a user connected');
@@ -58,13 +60,32 @@ SocketServices.prototype.start = function () {
         });
 
         socket.on('direction', function (direction) {
-            io.sockets.in(_room).emit('msg', 'Player ' + _player + ' moved their paddle ' + direction);
+            var movement = 1;
+            if (direction === "down") {
+                movement = -1;
+            }
             var event = new Event();
             event.ts = new Date().getTime();
             event.move = direction;
             event.player = _player;
-            event.state = null;
+            event.state = pongServices.updatePong(_room, _player, movement);
             event.pongId = _room;
+
+            eventServices.addEvent(event);
+            io.sockets.in(_room).emit('msg', 'Player ' + _player + ' moved their paddle ' + direction);
+        });
+
+        socket.on('update', function () {
+            var event = new Event();
+            event.ts = new Date().getTime();
+            event.move = null;
+            event.player = null;
+            event.state = pongServices.updatePong(_room, null, null);
+            event.pongId = _room;
+
+            eventServices.addEvent(event);
+            var stateMessage = "Ball = " + event.state.ball.x + "," + event.state.ball.y + "; Score = L: " + event.state.scoreL + " -  R:" + event.state.scoreR;
+            io.sockets.in(_room).emit('msg', stateMessage);
         });
     });
 };

@@ -77,6 +77,10 @@
 
         socket.on('msg', function (msg) {
             $('#messages').append($('<li>').text(msg));
+            //Auto trim the messages since we're getting a ton of them
+            if ($('#messages li').length > 20) {
+                $('#messages li').first().remove();
+            }
         });
 
         $(".arrow").click(function(e) {
@@ -84,6 +88,10 @@
             var direction = $(this).attr('id');
             socket.emit('direction', direction);
         });
+
+        setInterval(function() {
+            socket.emit('update');
+        }, 33); // 33 milliseconds = ~ 30 frames per sec
     });
 </script>
 </body>
