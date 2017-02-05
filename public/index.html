@@ -88,10 +88,6 @@
             var direction = $(this).attr('id');
             socket.emit('direction', direction);
         });
-
-        setInterval(function() {
-            socket.emit('update');
-        }, 33); // 33 milliseconds = ~ 30 frames per sec
     });
 </script>
 </body>

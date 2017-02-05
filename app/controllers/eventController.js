@@ -4,7 +4,7 @@ var Event = require('../models/event');
 
 router.route('/')
     .get(function (req, res) {
-        Event.find(function (err, events) {
+        Event.find().limit(100).exec(function (err, events) {
             if (err)
                 res.send(err);
             res.json(events);

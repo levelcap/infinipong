@@ -1,12 +1,12 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
-var PongServices = require('./app/services/pongServices');
 
 var port = process.env.PORT || 3000;
 var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
+app.set('socketio', io);
 var router = express.Router();
 var SocketServices = require('./app/services/socketServices');
 
@@ -40,11 +40,3 @@ socketServices.start();
 http.listen(port, function () {
     console.log('listening on *:' + port);
 });
-
-var pongServices = new PongServices();
-// setInterval(function() {
-//     pongServices.getPongs().forEach(function(pong) {
-//         console.log("Trying to send a thing for: " + pong.id);
-//         io.sockets.in(pong.id).emit('msg', 'Hello from ' + pong.id);
-//     });
-// }, 1000);

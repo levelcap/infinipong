@@ -9,7 +9,7 @@ function SocketServices(io) {
 SocketServices.prototype.start = function () {
     var io = this.io;
     var eventServices = new EventServices();
-    var pongServices = new PongServices();
+    var pongServices = new PongServices(io);
 
     io.on('connection', function (socket) {
         console.log('a user connected');
@@ -73,19 +73,6 @@ SocketServices.prototype.start = function () {
 
             eventServices.addEvent(event);
             io.sockets.in(_room).emit('msg', 'Player ' + _player + ' moved their paddle ' + direction);
-        });
-
-        socket.on('update', function () {
-            var event = new Event();
-            event.ts = new Date().getTime();
-            event.move = null;
-            event.player = null;
-            event.state = pongServices.updatePong(_room, null, null);
-            event.pongId = _room;
-
-            eventServices.addEvent(event);
-            var stateMessage = "Ball = " + event.state.ball.x + "," + event.state.ball.y + "; Score = L: " + event.state.scoreL + " -  R:" + event.state.scoreR;
-            io.sockets.in(_room).emit('msg', stateMessage);
         });
     });
 };

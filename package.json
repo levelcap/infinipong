@@ -3,14 +3,19 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "node server"
+    "start": "node server",
+    "test": "mocha test"
   },
   "dependencies": {
     "body-parser": "^1.16.0",
+    "chai": "^3.5.0",
     "express": "^4.14.1",
     "hashmap": "^2.0.6",
+    "mocha": "^3.2.0",
     "mongoose": "^4.8.1",
+    "request": "^2.79.0",
     "socket.io": "^1.7.2",
+    "socket.io-client": "^1.7.2",
     "util": "^0.10.3"
   }
 }
