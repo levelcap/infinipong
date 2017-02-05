@@ -10,7 +10,9 @@ var io = require('socket.io')(http);
 var router = express.Router();
 var SocketServices = require('./app/services/socketServices');
 
-mongoose.connect('mongodb://dbuser:password@ds015335.mlab.com:15335/infinipong');
+var dbuser = process.env.DBUSER;
+var dbpass = process.env.DBPASS;
+mongoose.connect('mongodb://' + dbuser + ':' + dbpass + '@ds015335.mlab.com:15335/infinipong');
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
 
