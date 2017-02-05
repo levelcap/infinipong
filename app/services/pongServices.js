@@ -3,6 +3,7 @@ var HashMap = require('hashmap');
 var Pong = require('../models/pong');
 var Event = require('../models/event');
 var PongComponent = require('../components/pongComponent');
+var SocketComponent = require('../components/socketComponent');
 var EventServices = require('../services/eventServices');
 var eventServices = new EventServices();
 
@@ -13,16 +14,9 @@ var _currentPong = null;
 
 var _scoreLeftTeam = 0;
 var _scoreRightTeam = 0;
-var _io = null;
 
 function PongServices() {
 
-}
-
-function PongServices(io) {
-    if (_io === null) {
-        _io = io;
-    }
 }
 
 PongServices.prototype.addOrUpdateLatestPong = function (pong, newPong) {
@@ -92,9 +86,7 @@ PongServices.prototype.getCurrentPong = function () {
 
 PongServices.prototype.nextGameOrScore = function (moveX, pongComponent) {
     var nextGame = pongComponent.position + moveX;
-    console.log("Looking for game at position: " + moveX);
     var self = this;
-    console.log(this.toString());
     Pong.findOne({'position': nextGame}, function (err, pong) {
         if (err) {
             console.log(err);
@@ -123,11 +115,11 @@ PongServices.prototype.goal = function (pongComponent) {
 
     eventServices.addEvent(event);
     var goalMessage = "Goal! Score is now Left: " + _scoreLeftTeam + ", Right: " + _scoreRightTeam;
-    _io.sockets.in(pongComponent.id).emit('goal', {scoreL: _scoreLeftTeam, scoreR: _scoreRightTeam, msg: goalMessage});
+    console.log(goalMessage);
+    SocketComponent.getIo().sockets.in(pongComponent.id).emit('goal', {scoreL: _scoreLeftTeam, scoreR: _scoreRightTeam, msg: goalMessage});
 };
 
 PongServices.prototype.tickComplete = function (pongComponent) {
-    console.log(pongComponent);
     var event = new Event();
     event.ts = new Date().getTime();
     event.move = null;
@@ -136,8 +128,8 @@ PongServices.prototype.tickComplete = function (pongComponent) {
     event.pongId = pongComponent.id;
 
     eventServices.addEvent(event);
-    var stateMessage = "Ball = " + pongComponent.ball.x + "," + pongComponent.ball.y + "; Score = L: " + _scoreLeftTeam + " -  R:" + _scoreRightTeam;
-    _io.sockets.in(pongComponent.id).emit('msg', stateMessage);
+    var stateMessage = "Ball = " + pongComponent.ball.x + "," + pongComponent.ball.y;
+    SocketComponent.getIo().sockets.in(pongComponent.id).emit('msg', stateMessage);
 }
 
 module.exports = PongServices;

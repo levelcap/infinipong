@@ -7,7 +7,6 @@ EventServices.prototype.addEvent = function(event) {
         if (err) {
             console.log(err);
         }
-        console.log("Event saved: " + event);
     });
 };
 

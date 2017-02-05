@@ -1,13 +1,19 @@
 var EventServices = require('../services/eventServices');
 var PongServices = require('../services/pongServices');
 var Event = require('../models/event');
+var SocketComponent = require('../components/socketComponent');
+var _started = false;
 
-function SocketServices(io) {
-    this.io = io;
+function SocketServices() {
+
 }
 
 SocketServices.prototype.start = function () {
-    var io = this.io;
+    //Don't need to start twice
+    if (_started) {
+        return;
+    }
+    var io = SocketComponent.getIo();
     var eventServices = new EventServices();
     var pongServices = new PongServices(io);
 
@@ -70,11 +76,21 @@ SocketServices.prototype.start = function () {
             event.player = _player;
             event.state = pongServices.updatePong(_room, _player, movement);
             event.pongId = _room;
-
             eventServices.addEvent(event);
-            io.sockets.in(_room).emit('msg', 'Player ' + _player + ' moved their paddle ' + direction);
+
+            var resp = {
+                msg: 'Player ' + _player + ' moved their paddle ' + direction,
+                paddleL: event.state.paddleL,
+                paddleR: event.state.paddleR
+            };
+            io.sockets.in(_room).emit('directionResp', resp);
         });
     });
+    _started = true;
+};
+
+SocketServices.prototype.isStarted = function() {
+    return _started;
 };
 
 module.exports = SocketServices;

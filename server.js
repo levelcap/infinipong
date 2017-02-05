@@ -6,13 +6,12 @@ var port = process.env.PORT || 3000;
 var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-app.set('socketio', io);
 var router = express.Router();
-var SocketServices = require('./app/services/socketServices');
+var SocketComponent = require('./app/components/socketComponent');
 
 var dbuser = process.env.DBUSER;
 var dbpass = process.env.DBPASS;
-mongoose.connect('mongodb://' + dbuser + ':' + dbpass + '@ds015335.mlab.com:15335/infinipong');
+mongoose.connect('mongodb://' + dbuser + ':' + dbpass + '@ds143539.mlab.com:43539/infinipong');
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
 
@@ -34,8 +33,7 @@ app.get('/', function (req, res) {
     res.sendFile(__dirname + '/public/index.html');
 });
 
-var socketServices = new SocketServices(io);
-socketServices.start();
+SocketComponent.setIo(io);
 
 http.listen(port, function () {
     console.log('listening on *:' + port);

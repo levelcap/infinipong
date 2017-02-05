@@ -1,4 +1,3 @@
-var chai = require('chai');
 var io = require('socket.io-client');
 
 var socketURL = 'http://localhost:3000';

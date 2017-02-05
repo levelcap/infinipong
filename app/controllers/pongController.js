@@ -3,6 +3,7 @@ var express = require('express');
 var router = express.Router();
 var Pong = require('../models/pong');
 var PongServices = require('../services/pongServices');
+var SocketServices = require('../services/socketServices');
 
 function PongController() {
 
@@ -33,6 +34,7 @@ router.route('/')
 
 router.route('/start')
     .post(function (req, res) {
+        var socketServices = new SocketServices();
         var pongServices = new PongServices();
         var newPong = false;
         var pong = pongServices.getCurrentPong();
@@ -52,6 +54,7 @@ router.route('/start')
                 res.send(err);
             }
             pongServices.addOrUpdateLatestPong(pong, newPong);
+            socketServices.start();
             res.json({message: 'Pong game created!', pong: pong});
         });
     });

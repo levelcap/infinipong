@@ -48,6 +48,28 @@
         #messages li:nth-child(odd) {
             background: #eee;
         }
+
+        #gameInfo {
+            background-color: aliceblue;
+            position: fixed;
+            bottom: 40px;
+            width: 100%;
+            font-size: 18px;
+        }
+
+        #left {
+            float: left;
+            padding-left: 20px;
+            text-align: left;
+            display: inline-block;
+        }
+
+        #right {
+            float: right;
+            padding-right: 20px;
+            text-align: right;
+            display: inline-block;
+        }
     </style>
     <script
             src="https://code.jquery.com/jquery-3.1.1.js"
@@ -56,6 +78,24 @@
 </head>
 <body>
 <ul id="messages"></ul>
+<div id="gameInfo">
+    <div id="left">
+        <div>
+            <span>Left Paddle:</span><span id="leftPaddle">0</span>
+        </div>
+        <div>
+            <span>Left Score:</span><span id="leftScore">0</span>
+        </div>
+    </div>
+    <div id="right">
+        <div>
+            <span>Right Paddle:</span><span id="rightPaddle">0</span>
+        </div>
+        <div>
+            <span>Right Score:</span><span id="rightScore">0</span>
+        </div>
+    </div>
+</div>
 <form>
     <center>
         <button id="up" class="arrow">
@@ -78,12 +118,34 @@
         socket.on('msg', function (msg) {
             $('#messages').append($('<li>').text(msg));
             //Auto trim the messages since we're getting a ton of them
-            if ($('#messages li').length > 20) {
+            if ($('#messages li').length > 15) {
                 $('#messages li').first().remove();
             }
         });
 
-        $(".arrow").click(function(e) {
+        socket.on('directionResp', function (resp) {
+            $('#messages').append($('<li>').text(resp.msg));
+            //Auto trim the messages since we're getting a ton of them
+            if ($('#messages li').length > 15) {
+                $('#messages li').first().remove();
+            }
+
+            $("#leftPaddle").text(resp.paddleL);
+            $("#rightPaddle").text(resp.paddleR);
+        });
+
+        socket.on('goal', function (resp) {
+            $('#messages').append($('<li>').text(resp.msg));
+            //Auto trim the messages since we're getting a ton of them
+            if ($('#messages li').length > 15) {
+                $('#messages li').first().remove();
+            }
+
+            $("#leftScore").text(resp.scoreL);
+            $("#rightScore").text(resp.scoreR);
+        });
+
+        $(".arrow").click(function (e) {
             e.preventDefault();
             var direction = $(this).attr('id');
             socket.emit('direction', direction);
