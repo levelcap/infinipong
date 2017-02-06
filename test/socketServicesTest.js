@@ -13,6 +13,10 @@ var game2Player1 = {room: 2, player: 1};
 var game2Player2 = {room: 2, player: 2};
 
 describe("Pong Server", function () {
+    before(function() {
+        //TODO: Sockets no longer start when server starts, to kick them off we need to POST to the api/start endpoint
+    });
+
     it('Should emit joined message to all users', function (done) {
         //socket.emit('direction', direction);
         var client1 = io.connect(socketURL, options);

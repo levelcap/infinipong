@@ -1,5 +1,4 @@
 var EventServices = require('../services/eventServices');
-var PongServices = require('../services/pongServices');
 var Event = require('../models/event');
 var SocketUtils = require('../utils/socketUtils');
 var _started = false;

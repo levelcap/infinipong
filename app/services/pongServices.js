@@ -32,11 +32,12 @@ PongServices.prototype.foundActiveSession = function(activeSession, startCallbac
     if (activeSession === null) {
         sessionServices.startSession(self.startSessionComplete.bind(self), startCallback);
     } else {
-        self.startSessionComplete(self, startCallback)
+        self.startSessionComplete(startCallback)
     }
 };
 
-PongServices.prototype.startSessionComplete = function(self, startCallback) {
+PongServices.prototype.startSessionComplete = function(startCallback) {
+    var self = this;
     //See if we have an existing game that needs players
     var pong = self.getPongThatNeedsPlayers();
 
