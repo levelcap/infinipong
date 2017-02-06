@@ -11,6 +11,8 @@ var SocketComponent = require('./app/components/socketComponent');
 
 var dbuser = process.env.DBUSER;
 var dbpass = process.env.DBPASS;
+console.log("DBUSER = " + dbuser);
+console.log("DBPASS = " + dbpass);
 mongoose.connect('mongodb://' + dbuser + ':' + dbpass + '@ds143539.mlab.com:43539/infinipong');
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
