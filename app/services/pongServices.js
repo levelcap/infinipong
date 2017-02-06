@@ -22,15 +22,15 @@ function PongServices() {
 }
 
 PongServices.prototype.startGame = function (startCallback) {
-    console.log("startGame");
     var self = this;
     //If we don't have an active session, start a new one
-    sessionServices.getActiveSession(self.foundActiveSession, self, startCallback);
+    sessionServices.getActiveSession(self.foundActiveSession.bind(self), startCallback);
 };
 
-PongServices.prototype.foundActiveSession = function(activeSession, self, startCallback) {
+PongServices.prototype.foundActiveSession = function(activeSession, startCallback) {
+    var self = this;
     if (activeSession === null) {
-        sessionServices.startSession(self.startSessionComplete, self, startCallback);
+        sessionServices.startSession(self.startSessionComplete.bind(self), startCallback);
     } else {
         self.startSessionComplete(self, startCallback)
     }
@@ -53,7 +53,7 @@ PongServices.prototype.startSessionComplete = function(self, startCallback) {
         pong.needsPlayers = true;
         pong.updateTime = new Date().getTime();
 
-        sessionServices.getAndUpdateNextPosition(pong, thisPlayer, self.completeStartGame, self, startCallback);
+        sessionServices.getAndUpdateNextPosition(pong, thisPlayer, self.completeStartGame.bind(this), startCallback);
     } else {
         //Add needed player based on activePlayer
         if (pong.activePlayers[0].paddle == "left") {
@@ -64,11 +64,12 @@ PongServices.prototype.startSessionComplete = function(self, startCallback) {
         pong.needsPlayers = true;
         pong.updateTime =  new Date().getTime();
         thisPlayer = 2;
-        self.completeStartGame(pong, thisPlayer, self, startCallback);
+        self.completeStartGame(pong, thisPlayer, startCallback);
     }
 };
 
-PongServices.prototype.completeStartGame = function(pong, thisPlayer, self, startCallback) {
+PongServices.prototype.completeStartGame = function(pong, thisPlayer, startCallback) {
+    var self = this;
     pong.save(function (err, pong) {
         if (err) {
             console.error(err);
@@ -143,9 +144,9 @@ PongServices.prototype.nextGameOrScore = function (moveX, pongUtils, ball) {
         if (nextPong == null) {
             //If we are moving to the left when the score occurs, increment the right team's score by 1
             if (moveX < 0) {
-                sessionServices.updateScore(0, 1, this.scoreUpdateComplete, self);
+                sessionServices.updateScore(0, 1, this.scoreUpdateComplete.bind(self));
             } else {
-                sessionServices.updateScore(1, 0, this.scoreUpdateComplete, self);
+                sessionServices.updateScore(1, 0, this.scoreUpdateComplete.bind(self));
             }
         } else {
             var nextPongUtils = self.getPongById(nextPong.id);
