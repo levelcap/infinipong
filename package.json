@@ -17,5 +17,8 @@
     "socket.io": "^1.7.2",
     "socket.io-client": "^1.7.2",
     "util": "^0.10.3"
+  },
+  "engines": {
+    "node": "7.4.0"
   }
 }

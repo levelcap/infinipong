@@ -7,7 +7,7 @@ var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var router = express.Router();
-var SocketComponent = require('./app/components/socketComponent');
+var SocketUtils = require('./app/components/socketUtils');
 
 var dbuser = process.env.DBUSER;
 var dbpass = process.env.DBPASS;
@@ -33,7 +33,7 @@ app.get('/', function (req, res) {
     res.sendFile(__dirname + '/public/index.html');
 });
 
-SocketComponent.setIo(io);
+SocketUtils.setIo(io);
 
 http.listen(port, function () {
     console.log('listening on *:' + port);

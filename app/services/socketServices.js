@@ -1,7 +1,7 @@
 var EventServices = require('../services/eventServices');
 var PongServices = require('../services/pongServices');
 var Event = require('../models/event');
-var SocketComponent = require('../components/socketComponent');
+var SocketUtils = require('../components/socketUtils');
 var _started = false;
 
 function SocketServices() {
@@ -16,7 +16,7 @@ SocketServices.prototype.start = function () {
     if (_started) {
         return;
     }
-    var io = SocketComponent.getIo();
+    var io = SocketUtils.getIo();
     var eventServices = new EventServices();
     var pongServices = new PongServices(io);
 

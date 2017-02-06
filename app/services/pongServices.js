@@ -2,59 +2,76 @@ const util = require('util');
 var HashMap = require('hashmap');
 var Pong = require('../models/pong');
 var Event = require('../models/event');
-var PongComponent = require('../components/pongComponent');
-var SocketComponent = require('../components/socketComponent');
+var Session = require('../models/session');
+var PongUtils = require('../utils/pongUtils');
+var SocketUtils = require('../utils/socketUtils');
 var EventServices = require('../services/eventServices');
+var SessionServices = require('../services/sessionServices');
+
+//We only need one instance of Session and Event services
+var sessionServices = new SessionServices();
 var eventServices = new EventServices();
 
-var _pongs = new HashMap();
-var _pongsNeedPlayers = [];
-var _high = Number.NaN;
-var _low = Number.NaN;
-var _currentPong = null;
-
-var _scoreLeftTeam = 0;
-var _scoreRightTeam = 0;
+//Store games to update on server ticks, we still go to MongoDB for inter-game communication
+var _pongUtils = new HashMap();
 
 function PongServices() {
 
 }
 
-/**
- *
- * @param pong
- * @param newPong
- */
-PongServices.prototype.addOrUpdateLatestPong = function (pong, newPong) {
-    _currentPong = pong;
-    if (newPong) {
-        var last = _currentPong.position;
-        if (isNaN(_high) || _high < pong.position) {
-            _high = last;
-        }
-
-        if (isNaN(_low) || _low > pong.position) {
-            _low = last;
-        }
-        var pongComponent = new PongComponent(pong.id, pong.position, pong.activePlayers, this);
-        pongComponent.start();
-        _pongs.set(pong.id, pongComponent);
-        //New pongs need a second player
-        _pongsNeedPlayers.push(pong);
-    } else {
-        var pongComponent = _pongs.get(pong.id);
-        //We only add players to the oldest pong that needs them, remove this from the pongsNeedPlayers array
-        _pongsNeedPlayers.splice(0,1);
+PongServices.prototype.startGame = function () {
+    //If we don't have an active session, start a new one
+    if (sessionServices.getActiveSession() == null) {
+        sessionServices.startSession();
     }
 
+    //See if we have an existing game that needs players
+    var pong = this.getPongThatNeedsPlayers();
+
+    //TODO: Keeping thisPlayer and activePlayers as separate values is silly
+    var thisPlayer = 1;
+
+    //If no game needs players, create a new one
+    if (pong === null) {
+        pong = new Pong();
+        pong.activePlayers = [{paddle: "left"}];
+        pong.position = sessionServices.getAndUpdateNextPosition();
+    } else {
+        //Add needed player based on activePlayer
+        if (pong.activePlayers[0].paddle == "left") {
+            pong.activePlayers.push({paddle: "right"});
+        } else {
+            pong.activePlayers.push({paddle: "left"});
+        }
+        thisPlayer = 2;
+    }
+
+    pong.save(function (err, pong) {
+        if (err) {
+            return err;
+        }
+        pongServices.addOrUpdateLatestPong(pong);
+        socketServices.start();
+        return {message: 'Pong game saved!', pong: pong, player: thisPlayer};
+    });
 };
 
-PongServices.prototype.getPongs = function () {
-    return _pongs;
+/**
+ *
+ * @param pong - Pong model to add or update
+ */
+PongServices.prototype.addOrUpdateLatestPong = function (pong) {
+    if (_pongUtils.get(pong.id) == null) {
+        var pongUtils = new PongUtils(pong, this);
+        pongUtils.start();
+    } else {
+        var pongUtils = _pongUtils.get(pong.id);
+        pongUtils.pong.activePlayers = pong.activePlayers;
+    }
 };
 
 PongServices.prototype.getPongById = function (id) {
-    return _pongs.get(id);
+    return _pongUtils.get(id);
 };
 
 /**
@@ -65,35 +82,23 @@ PongServices.prototype.getPongById = function (id) {
  * @return state of the game
  */
 PongServices.prototype.updatePong = function (id, player, movement) {
-    var pongComponent = this.getPongById(id);
-    pongComponent.updatePongComponentPlayer(player, movement);
-    return pongComponent;
+    var pongUtils = this.getPongById(id);
+    pongUtils.updatePongPlayer(player, movement);
+    return pongUtils;
 };
 
 /**
- * Get the position number for the next game, alternating between boards appearing on the left or right
- * @returns position for next pong game as a number
- */
-PongServices.prototype.getNextPosition = function () {
-    //If we have not yet set a position, use the first position of 0
-    if (_currentPong == null) {
-        return 0;
-    }
-    //If our last game had a negative position, next position will be our highest position + 1 to switch sides
-    else if (_currentPong.position < 0) {
-        return _high + 1;
-    }
-    //If our last game had a positive position, next position will be our lowest position -1 to switch sides
-    else {
-        return _low - 1;
-    }
-};
-
-/**
- * Checks the needs players list and returns the oldest pong that requires a player, or null if none do
- * @returns the oldest pong game that is missing a player or null
+ * Find one pong in the DB that has an activePlayers size of 1
+ * TODO: Order by update time so we get the game that has needed a player the longest
+ * @returns a pong game that is missing a player or null
  */
 PongServices.prototype.getPongThatNeedsPlayers = function () {
+    Pong.findOne({activePlayers: {$size: 1}}, function (err, pong) {
+        if (err) {
+            console.error(err);
+            return null;
+        }
+    });
     if (_pongsNeedPlayers != null && _pongsNeedPlayers.length > 0) {
         return _pongsNeedPlayers[0];
     } else {
@@ -104,45 +109,46 @@ PongServices.prototype.getPongThatNeedsPlayers = function () {
 /**
  * Check if a score is a goal or if a ball should be added to an adjacent pong game.
  * @param moveX - Direction and amount of the move on the x-axis
- * @param pongComponent - Pong game state
+ * @param pongUtils - Pong game state
  * @param ball - Information about the ball which scored
  */
-PongServices.prototype.nextGameOrScore = function (moveX, pongComponent, ball) {
-    var nextGame = pongComponent.position + moveX;
+PongServices.prototype.nextGameOrScore = function (moveX, pongUtils, ball) {
+    var nextGame = pongUtils.position + moveX;
     var self = this;
     Pong.findOne({'position': nextGame}, function (err, pong) {
         if (err) {
             console.error(err);
         }
         if (pong == null) {
+            //If we are moving to the left when the score occurs, increment the right team's score by 1
             if (moveX < 0) {
-                _scoreRightTeam++;
+                sessionServices.updateScore(0, 1);
             } else {
-                _scoreLeftTeam++;
+                sessionServices.updateScore(1, 0);
             }
-            self.goal(pongComponent);
+            self.goal(pongUtils);
         } else {
-            var nextPongComponent = self.getPongById(pong.id);
-            nextPongComponent.addNewBall(ball);
+            var nextPong = self.getPongById(pong.id);
+            nextPong.addNewBall(ball);
         }
     });
 };
 
 /**
  * Send a goal / score update
- * @param pongComponent - pong game where score occured
+ * @param pongUtils - pong game where score occured
  */
-PongServices.prototype.goal = function (pongComponent) {
+PongServices.prototype.goal = function (pongUtils) {
     var event = new Event();
     event.ts = new Date().getTime();
     event.move = "Score";
     event.player = null;
-    event.state = pongComponent;
-    event.pongId = pongComponent.id;
+    event.state = pongUtils;
+    event.pongId = pongUtils.id;
 
     eventServices.addEvent(event);
     var goalMessage = "Goal! Score is now Left: " + _scoreLeftTeam + ", Right: " + _scoreRightTeam;
-    SocketComponent.getIo().sockets.in(pongComponent.id).emit('goal', {
+    SocketUtils.getIo().sockets.in(pongUtils.id).emit('goal', {
         scoreL: _scoreLeftTeam,
         scoreR: _scoreRightTeam,
         msg: goalMessage
@@ -151,19 +157,19 @@ PongServices.prototype.goal = function (pongComponent) {
 
 /**
  * Emit a message about the current pong state once per tick
- * @param pongComponent - pong game to send tick update for
+ * @param pongUtils - pong game to send tick update for
  */
-PongServices.prototype.tickComplete = function (pongComponent) {
+PongServices.prototype.tickComplete = function (pongUtils) {
     var event = new Event();
     event.ts = new Date().getTime();
     event.move = null;
     event.player = null;
-    event.state = pongComponent;
-    event.pongId = pongComponent.id;
+    event.state = pongUtils;
+    event.pongId = pongUtils.id;
 
     eventServices.addEvent(event);
-    var stateMessage = "Balls = " + JSON.stringify(pongComponent.balls);
-    SocketComponent.getIo().sockets.in(pongComponent.id).emit('msg', stateMessage);
+    var stateMessage = "Balls = " + JSON.stringify(pongUtils.balls);
+    SocketUtils.getIo().sockets.in(pongUtils.id).emit('msg', stateMessage);
 };
 
 /**
@@ -171,17 +177,17 @@ PongServices.prototype.tickComplete = function (pongComponent) {
  * @param id - id of game to update
  * @param player - player that left the game
  */
-PongServices.prototype.addPongToNeedsPlayersList = function(id, player) {
-    var pongComponent = this.getPongById(id);
-    if (pongComponent.activePlayers.length === 1) {
-        this.updatePongsForEmptyGame(pongComponent.position);
+PongServices.prototype.addPongToNeedsPlayersList = function (id, player) {
+    var pongUtils = this.getPongById(id);
+    if (pongUtils.activePlayers.length === 1) {
+        this.updatePongsForEmptyGame(pongUtils.position);
     } else {
         if (player === 1) {
-            pongComponent.activePlayers = [{paddle: "right"}];
+            pongUtils.activePlayers = [{paddle: "right"}];
         } else {
-            pongComponent.activePlayers = [{paddle: "left"}];
+            pongUtils.activePlayers = [{paddle: "left"}];
         }
-        _pongsNeedPlayers.push(pongComponent);
+        _pongsNeedPlayers.push(pongUtils);
     }
 };
 
