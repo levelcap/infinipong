@@ -1,7 +1,7 @@
 var EventServices = require('../services/eventServices');
 var PongServices = require('../services/pongServices');
 var Event = require('../models/event');
-var SocketUtils = require('../components/socketUtils');
+var SocketUtils = require('../utils/socketUtils');
 var _started = false;
 
 function SocketServices() {
@@ -11,14 +11,13 @@ function SocketServices() {
 /**
  * Setup socket event listeners
  */
-SocketServices.prototype.start = function () {
+SocketServices.prototype.start = function (pongServices) {
     //Don't need to start twice
     if (_started) {
         return;
     }
     var io = SocketUtils.getIo();
     var eventServices = new EventServices();
-    var pongServices = new PongServices(io);
 
     io.on('connection', function (socket) {
         console.log('a user connected');
@@ -73,19 +72,22 @@ SocketServices.prototype.start = function () {
             if (direction === "down") {
                 movement = -1;
             }
+            var pongUtils = pongServices.updatePong(_room, _player, movement);
+            var pong = pongUtils.pong;
             var event = new Event();
             event.ts = new Date().getTime();
             event.move = direction;
             event.player = _player;
-            event.state = pongServices.updatePong(_room, _player, movement);
+            event.state = pong
             event.pongId = _room;
             eventServices.addEvent(event);
-
+            console.log(pong);
             var resp = {
                 msg: 'Player ' + _player + ' moved their paddle ' + direction,
-                paddleL: event.state.paddleL,
-                paddleR: event.state.paddleR
+                paddleL: pong.paddleL,
+                paddleR: pong.paddleR
             };
+            console.log(resp);
             io.sockets.in(_room).emit('directionResp', resp);
         });
     });

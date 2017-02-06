@@ -14,6 +14,12 @@ var _gameLoop = null;
  */
 function PongUtils(pong, pongServices) {
     this.pong = pong;
+    this.pong.balls = [{
+        x: 0,
+        y: 0,
+        moveX: 1,
+        moveY: 0
+    }]
     this.pongServices = pongServices;
 }
 
@@ -49,7 +55,7 @@ PongUtils.prototype.newPoint = function (moveX, ball) {
             x: 0,
             y: 0,
             moveX: moveX,
-            moveY: 0,
+            moveY: 0
         });
     }
 
@@ -91,9 +97,9 @@ PongUtils.prototype.updatePongBalls = function () {
         if (Math.abs(ball.x) >= BALL_LIMIT) {
             //Check if the paddle covers the current ball position, moveX < 0 could be paddleL, otherwise paddleR
             if (ball.moveX < 0) {
-                self.performPaddleCollision(self.paddleL, true, ball, index);
+                self.performPaddleCollision(self.pong.paddleL, true, ball, index);
             } else {
-                self.performPaddleCollision(self.paddleR, false, ball, index);
+                self.performPaddleCollision(self.pong.paddleR, false, ball, index);
             }
         }
         index++;
@@ -102,7 +108,7 @@ PongUtils.prototype.updatePongBalls = function () {
     //Remove balls that have left play
     var self = this;
     _removeBallIndexes.forEach(function (idx) {
-        self.balls.splice(idx, 1);
+        self.pong.balls.splice(idx, 1);
     });
 
     //Blank remove array for next loop

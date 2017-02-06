@@ -21,7 +21,11 @@ router.route('/')
 router.route('/start')
     .post(function (req, res) {
         var pongServices = new PongServices();
-        return res.json(pongServices.startGame());
+        function startComplete(resp) {
+            res.json(resp)
+        };
+        pongServices.startGame(startComplete);
+
     });
 
 router.route('/:pong_id')

@@ -6,57 +6,19 @@ function SessionServices() {
 }
 
 /**
- * Retrieve the position number we should use for our next game
- */
-SessionServices.prototype.getNextPosition = function () {
-    Session.findOne({'active': true}, function (err, session) {
-        if (err) {
-            console.error(err);
-            return 0;
-        }
-        if (session === null) {
-            return 0;
-        } else {
-            //If the absolute value of nextLeftPosition is less than that of nextRightPosition, use nextLeftPosition
-            return (Math.abs(session.nextLeftPosition) < Math.abs(nextRightPosition)) ? session.nextLeftPosition : session.nextRightPosition;
-        }
-    });
-};
-
-/**
- * Update the next position based on the new game
- * @param left
- */
-SessionServices.prototype.updateNextPosition = function(pong) {
-    if (pong.position >= 0) {
-        Session.update({active : true}, {$inc: {nextRightPosition: 1}}, function(err, result) {
-            if (err) {
-                console.error(err);
-            }
-        });
-    } else {
-        Session.update({active : true}, {$inc: {nextLeftPosition: -1}}, function(err, result) {
-            if (err) {
-                console.error(err);
-            }
-        });
-    }
-};
-
-/**
  * Get and update the next position atomically
  */
-SessionServices.prototype.getAndUpdateNextPosition = function () {
+SessionServices.prototype.getAndUpdateNextPosition = function (pong, thisPlayer, callback, self, startCallback) {
     Session.findOne({'active': true}, function (err, session) {
         if (err) {
             console.error(err);
-            return null;
+            callback(pong, thisPlayer, self, startCallback);
         }
         if (session === null) {
-            return null;
+            callback(pong, thisPlayer, self, startCallback);
         } else {
             //If the absolute value of nextLeftPosition is less than that of nextRightPosition, use nextLeftPosition
-            var position = (Math.abs(session.nextLeftPosition) < Math.abs(nextRightPosition)) ? session.nextLeftPosition : session.nextRightPosition;
+            var position = (Math.abs(session.nextLeftPosition) < Math.abs(session.nextRightPosition)) ? session.nextLeftPosition : session.nextRightPosition;
             //TODO: Updates can be done more safely by checking that we are updating the document in the same state we think we are
             if (position >= 0) {
                 Session.update({active : true}, {$inc: {nextRightPosition: 1}}, function(err) {
@@ -71,18 +33,23 @@ SessionServices.prototype.getAndUpdateNextPosition = function () {
                     }
                 });
             }
-            return position;
+            pong.position = position;
+            callback(pong, thisPlayer, self, startCallback);
         }
     });
 };
 
-SessionServices.prototype.getActiveSession = function() {
+SessionServices.prototype.getActiveSession = function(callback, self, startCallback) {
     Session.findOne({'active': true}, function (err, session) {
         if (err) {
             console.error(err);
-            return null;
+            callback(null, self);
         }
-        return session;
+        if (session === undefined) {
+            callback(null, self, startCallback);
+        } else {
+            callback(session, self, startCallback);
+        }
     });
 };
 
@@ -92,16 +59,17 @@ SessionServices.prototype.getActiveSession = function() {
  * @param rightScoreChange
  * @return updated Session
  */
-SessionServices.prototype.updateScore = function(leftScoreChange, rightScoreChange) {
-    Session.update({active : true}, {$inc: {scoreL: leftScoreChange, scoreR: rightScoreChange}}, function(err) {
+SessionServices.prototype.updateScore = function(leftScoreChange, rightScoreChange, callback, self) {
+     var that = this;
+     Session.update({active : true}, {$inc: {scoreL: leftScoreChange, scoreR: rightScoreChange}}, function(err) {
         if (err) {
             console.error(err);
         }
-        return this.getActiveSession();
+        that.getActiveSession(callback, self, null);
     });
 };
 
-SessionServices.prototype.startSession = function() {
+SessionServices.prototype.startSession = function(callback, self, startCallback) {
     var session = new Session();
     session.scoreL = 0;
     session.scoreR = 0;
@@ -111,10 +79,11 @@ SessionServices.prototype.startSession = function() {
 
     session.save(function (err, session) {
         if (err) {
-            console.error()
+            console.error(err);
         }
         var socketServices = new SocketServices();
         socketServices.start();
+        callback(self, startCallback);
     });
 };
 
