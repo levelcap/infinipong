@@ -1,9 +1,9 @@
-var mongoose = require('mongoose');
-var Schema = mongoose.Schema;
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-var safe = {w: "majority", wtimeout: 100};
+const safe = {w: "majority", wtimeout: 100};
 
-var EventSchema = new Schema({
+const EventSchema = new Schema({
     ts: Number,
     player: String,
     move: String,

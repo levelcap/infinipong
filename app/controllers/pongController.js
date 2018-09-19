@@ -1,114 +1,116 @@
-const util = require('util');
-var express = require('express');
-var router = express.Router();
-var Pong = require('../models/pong');
-var PongServices = require('../services/pongServices');
-var SocketServices = require('../services/socketServices');
+const logger = require('../cfg/logger')('infinipong');
+const _ = require('lodash');
+const express = require('express');
+const router = express.Router();
+const Pong = require('../models/pong');
+const pongServices = require('../services/pongServices');
+const socketServices = require('../services/socketServices');
 
-function PongController() {
+const POSITIONS = {
+  LEFT: 'left',
+  RIGHT: 'right',
+};
 
-}
+router.route('/').post(async (req, res) => {
+  // Position and active players can both be 0, default to null for missing
+  const position = _.get(req, 'body.position', null);
+  const activePlayers = _.get(req, 'body.activePlayers', null);
+  if (position === null || activePlayers === null) {
+    return res.status(400);
+  }
 
-router.route('/')
-    .post(function (req, res) {
-        var pong = new Pong();
-        pong.position = req.body.position;
-        pong.activePlayers = req.body.activePlayers;
+  const pong = new Pong({
+    position: position,
+    activePlayers: activePlayers,
+  });
 
-        pong.save(function (err, pong) {
-            if (err) {
-                res.send(err);
-            }
-            var pongServices = new PongServices();
-            pongServices.addPong(pong);
-            res.json({message: 'Pong game created!', pong: pong});
-        });
-    })
-    .get(function (req, res) {
-        Pong.find(function (err, pongs) {
-            if (err)
-                res.send(err);
-            res.json(pongs);
-        });
+  try {
+    await pong.save();
+
+    pongServices.addPong(pong);
+    return res.json({ message: 'Pong game created!', pong: pong });
+  } catch (err) {
+    logger.error(`Unexpected error in POST /api/pongs`, err);
+    res.status(500).json(err);
+  }
+}).get(async (req, res) => {
+  try {
+    const pongs = await Pong.find({}).exec();
+    return res.json(pongs);
+  } catch (err) {
+    logger.error('Unexpected error in GET /api/pongs', err);
+    res.status(500).json(err);
+  }
+});
+
+router.route('/start').post(async (req, res) => {
+  //Starting a game of pong
+  let newPong = false;
+  let pong = pongServices.getPongThatNeedsPlayers();
+  let thisPlayer = 1;
+
+  if (pong === null) {
+    pong = new Pong({
+      position: pongServices.getNextPosition(),
+      activePlayers: [{ paddle: POSITIONS.LEFT }],
     });
+    newPong = true;
+  } else {
+    if (pong.activePlayers[0].paddle == POSITIONS.LEFT) {
+      pong.activePlayers.push({ paddle: POSITIONS.RIGHT });
+    } else {
+      pong.activePlayers.push({ paddle: POSITIONS.LEFT });
+    }
+    thisPlayer = 2;
+  }
 
-router.route('/start')
-    .post(function (req, res) {
-        //Starting a
-        var socketServices = new SocketServices();
-        var pongServices = new PongServices();
-        var newPong = false;
-        var pong = pongServices.getPongThatNeedsPlayers();
-        var thisPlayer = 1;
+  try {
+    if (newPong) {
+      await pong.save();
+      await pongServices.addOrUpdateLatestPong(pong, newPong);
+      socketServices.start();
+      return res.json({ message: 'Pong game created!', pong: pong, player: thisPlayer });
+    }
+    const foundPong = await Pong.findById(pong.id).exec();
+    foundPong.activePlayers = pong.activePlayers;
+    await pong.save();
+    res.json({ message: 'Pong game update!', pong: pong, player: thisPlayer });
+  } catch (err) {
+    console.log(err);
+    logger.error('Unexpected error in POST /api/pongs/start', err);
+    res.status(500).json(err);
+  }
+});
 
-        if (pong === null) {
-            pong = new Pong();
-            pong.position = pongServices.getNextPosition();
-            pong.activePlayers = [{paddle: "left"}];
-            newPong = true;
-        } else {
-            if (pong.activePlayers[0].paddle == "left") {
-                pong.activePlayers.push({paddle: "right"});
-            } else {
-                pong.activePlayers.push({paddle: "left"});
-            }
-            thisPlayer = 2;
-        }
+router.route('/:pong_id').get(async (req, res) => {
+  try {
+    const pong = await Pong.findById(pongId).exec();
+    return res.json(pong);
+  } catch (err) {
+    logger.error(`Unexpected error in GET /api/pongs/${pongId}`, err);
+    res.status(500).json(err);
+  }
+}).put(async (req, res) => {
+  const pongId = req.params.pong_id;
+  try {
+    const pong = await Pong.findById(pongId).exec();
+    pong.position = req.body.position;
+    pong.activePlayers = req.body.activePlayers;
+    await pong.save();
+    return res.json({ message: `Pong ${pongId} updated!` });
+  } catch (err) {
+    logger.error(`Unexpected error in PUT /api/pongs/${pongId}`, err);
+    res.status(500).json(err);
+  }
+}).delete(async (req, res) => {
+  const pongId = req.params.pong_id;
+  try {
+    await Pong.remove({ _id: pongId }).exec();
+    return res.json({ message: `Pong ${pongId} deleted!` });
+  } catch (err) {
+    logger.error(`Unexpected error in DELETE /api/pongs/${pongId}`, err);
+    res.status(500).json(err);
+  }
+});
 
-        if (newPong) {
-            pong.save(function (err, pong) {
-                if (err) {
-                    res.send(err);
-                }
-                pongServices.addOrUpdateLatestPong(pong, newPong);
-                socketServices.start();
-                res.json({message: 'Pong game created!', pong: pong, player: thisPlayer});
-            });
-        } else {
-            Pong.findById(pong.id, function (err, respPong) {
-                if (err)
-                    console.error(err);
-
-                respPong.activePlayers = pong.activePlayers;
-
-                pong.save(function (err) {
-                    if (err)
-                        console.error(err);
-                    res.json({message: 'Pong game update!', pong: pong, player: thisPlayer});
-                });
-            });
-        }
-    });
-
-router.route('/:pong_id')
-    .get(function (req, res) {
-        Pong.findById(req.params.pong_id, function (err, pong) {
-            if (err)
-                res.send(err);
-            res.json(pong);
-        });
-    })
-    .put(function (req, res) {
-        Pong.findById(req.params.pong_id, function (err, pong) {
-            if (err)
-                res.send(err);
-
-            pong.position = req.body.position;
-            pong.activePlayers = req.body.activePlayers;
-
-            pong.save(function (err) {
-                if (err)
-                    res.send(err);
-                res.json({message: 'Pong ' + req.params.pong_id + ' updated!'});
-            });
-        });
-    })
-    .delete(function (req, res) {
-        Pong.remove({_id: req.params.pong_id}, function (err, pong) {
-            if (err)
-                res.send(err);
-            res.json({message: 'Pong ' + req.params.pong_id + ' successfully deleted'});
-        });
-    });
-
-module.exports = router
+module.exports = router;

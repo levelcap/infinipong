@@ -1,42 +1,37 @@
-var express = require('express');
-var bodyParser = require('body-parser');
-var mongoose = require('mongoose');
+const express = require('express');
+const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+const config = require('./app/cfg/config');
+const logger = require('./app/cfg/logger')('infinipong');
 
-var port = process.env.PORT || 3000;
-var app = express();
-var http = require('http').Server(app);
-var io = require('socket.io')(http);
-var router = express.Router();
-var SocketComponent = require('./app/components/socketComponent');
+const port = config.port;
+const app = express();
+const http = require('http').Server(app);
+const io = require('socket.io')(http);
+const router = express.Router();
+const socketServices = require('./app/services/socketServices');
 
-var dbuser = process.env.DBUSER;
-var dbpass = process.env.DBPASS;
-console.log("DBUSER = " + dbuser);
-console.log("DBPASS = " + dbpass);
-mongoose.connect('mongodb://' + dbuser + ':' + dbpass + '@ds143539.mlab.com:43539/infinipong');
-app.use(bodyParser.urlencoded({extended: true}));
+mongoose.connect(config.mongo.url);
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-router.use(function (req, res, next) {
-    // do logging
-    console.log('An API request has been made');
-    next(); // make sure we go to the next routes and don't stop here
+router.use(function(req, res, next) {
+  next();
 });
 
-router.get('/', function (req, res) {
-    res.json({message: 'Nothing here at the default route'});
+router.get('/', function(req, res) {
+  res.json({ message: 'Nothing here at the default route' });
 });
 
-app.use('/api/pongs', require('./app/controllers/pongController'))
-app.use('/api/events', require('./app/controllers/eventController'))
+app.use('/api/pongs', require('./app/controllers/pongController'));
+app.use('/api/events', require('./app/controllers/eventController'));
 app.use('/api', router);
 
-app.get('/', function (req, res) {
-    res.sendFile(__dirname + '/public/index.html');
+app.get('/', function(req, res) {
+  res.sendFile(__dirname + '/public/index.html');
 });
 
-SocketComponent.setIo(io);
-
-http.listen(port, function () {
-    console.log('listening on *:' + port);
+socketServices.setIo(io);
+http.listen(port, function() {
+  logger.info('listening on *:' + port);
 });

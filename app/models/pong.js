@@ -1,7 +1,7 @@
-var mongoose = require('mongoose');
-var Schema = mongoose.Schema;
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-var PongSchema = new Schema({
+const PongSchema = new Schema({
     position: Number,
     activePlayers: Schema.Types.Mixed
 });

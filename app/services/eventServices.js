@@ -1,13 +1,13 @@
-function EventServices() {
+const logger = require('../cfg/logger')('infinipong');
 
+async function addEvent (event) {
+  try {
+    await event.save();
+  } catch (err) {
+    logger.error('Unexpected error in addEvent', err);
+  }
 }
 
-EventServices.prototype.addEvent = function(event) {
-    event.save(function (err, event) {
-        if (err) {
-            console.err(err);
-        }
-    });
+module.exports = {
+  addEvent,
 };
-
-module.exports = EventServices;
